@@ -80,6 +80,9 @@ struct ProxyEditorView: View {
     @State private var nowhereSpec = ""
     @State private var nowhereSNI = ""
     @State private var nowhereALPN = ""
+    @State private var nowhereUploadLane: NowhereProtocol.LaneKind = .quic
+    @State private var nowhereDownloadLane: NowhereProtocol.LaneKind = .quic
+    @State private var nowhereMuxEnabled = true
 
     // Trojan fields
     @State private var trojanPassword = ""
@@ -367,6 +370,23 @@ struct ProxyEditorView: View {
                         .multilineTextAlignment(.trailing)
                 } label: {
                     TextWithColorfulIcon(title: "Spec", comment: nil, systemName: "slider.horizontal.3", foregroundColor: .white, backgroundColor: .teal)
+                }
+                Picker(selection: $nowhereUploadLane) {
+                    Text("TLS").tag(NowhereProtocol.LaneKind.tcp)
+                    Text("QUIC").tag(NowhereProtocol.LaneKind.quic)
+                } label: {
+                    TextWithColorfulIcon(title: "Upload Lane", comment: nil, systemName: "arrow.up.circle.fill", foregroundColor: .white, backgroundColor: .blue)
+                }
+                .pickerStyle(.segmented)
+                Picker(selection: $nowhereDownloadLane) {
+                    Text("TLS").tag(NowhereProtocol.LaneKind.tcp)
+                    Text("QUIC").tag(NowhereProtocol.LaneKind.quic)
+                } label: {
+                    TextWithColorfulIcon(title: "Download Lane", comment: nil, systemName: "arrow.down.circle.fill", foregroundColor: .white, backgroundColor: .blue)
+                }
+                .pickerStyle(.segmented)
+                Toggle(isOn: $nowhereMuxEnabled) {
+                    TextWithColorfulIcon(title: "Mux", comment: "Mux for Nowhere TLS/TCP carrier", systemName: "rectangle.split.3x1.fill", foregroundColor: .white, backgroundColor: .teal)
                 }
             } else if isTrojan {
                 LabeledContent {
@@ -1082,11 +1102,14 @@ struct ProxyEditorView: View {
             hysteriaPortsSpec = portHopping?.portsSpec ?? ""
             hysteriaHopIntervalText = String(portHopping?.intervalSeconds ?? HysteriaPortHopping.defaultIntervalSeconds)
             hysteriaSNI = sni
-        case .nowhere(let key, let spec, let tls):
+        case .nowhere(let key, let spec, let tls, let route):
             nowhereKey = key
             nowhereSpec = spec ?? ""
             nowhereSNI = tls.serverName
             nowhereALPN = tls.alpn?.first ?? ""
+            nowhereUploadLane = route.tcpUpload
+            nowhereDownloadLane = route.tcpDownload
+            nowhereMuxEnabled = route.muxEnabled
         case .trojan(let password, let tls):
             trojanPassword = password
             trojanSNI = tls.serverName
@@ -1301,10 +1324,16 @@ struct ProxyEditorView: View {
             let sni = nowhereSNI.isEmpty ? bareAddress : nowhereSNI
             let spec = nowhereSpec.isEmpty ? nil : nowhereSpec
             let alpn: [String]? = nowhereALPN.isEmpty ? nil : [nowhereALPN]
+            let route = NowhereRoutePolicy(
+                tcpUpload: nowhereUploadLane,
+                tcpDownload: nowhereDownloadLane,
+                muxEnabled: nowhereMuxEnabled
+            )
             outbound = .nowhere(
                 key: nowhereKey,
                 spec: spec,
-                tls: TLSConfiguration(serverName: sni, alpn: alpn)
+                tls: TLSConfiguration(serverName: sni, alpn: alpn),
+                route: route
             )
         case .trojan:
             let sni = trojanSNI.isEmpty ? bareAddress : trojanSNI

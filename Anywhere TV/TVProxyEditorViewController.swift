@@ -84,6 +84,9 @@ class TVProxyEditorViewController: UITableViewController {
     private var nowhereSpec = ""
     private var nowhereSNI = ""
     private var nowhereALPN = ""
+    private var nowhereUploadLane: NowhereProtocol.LaneKind = .quic
+    private var nowhereDownloadLane: NowhereProtocol.LaneKind = .quic
+    private var nowhereMuxEnabled = true
 
     // Trojan fields
     private var trojanPassword = ""
@@ -167,6 +170,7 @@ class TVProxyEditorViewController: UITableViewController {
         case hysteriaPassword, hysteriaCC, hysteriaUploadMbps, hysteriaDownloadMbps,
              hysteriaPorts, hysteriaHopInterval, hysteriaSNI
         case nowhereKey, nowhereSpec, nowhereSNI, nowhereALPN
+        case nowhereUploadLane, nowhereDownloadLane, nowhereMux
         case trojanPassword, trojanSNI, trojanALPN, trojanECHEnabled, trojanECH, trojanFingerprint
         case anytlsPassword, anytlsSNI, anytlsALPN, anytlsECHEnabled, anytlsECH, anytlsFingerprint
         case ssPassword, ssMethod
@@ -232,6 +236,10 @@ class TVProxyEditorViewController: UITableViewController {
         } else if isNowhere {
             serverRows.append(.text(label: String(localized: "Key"), value: nowhereKey, placeholder: String(localized: "Key"), key: .nowhereKey, secure: true))
             serverRows.append(.text(label: String(localized: "Spec"), value: nowhereSpec, placeholder: String(localized: "Spec"), key: .nowhereSpec))
+            let laneOptions = [("TLS", "tcp"), ("QUIC", "quic")]
+            serverRows.append(.selection(label: String(localized: "Upload Lane"), value: nowhereLaneDisplayValue(nowhereUploadLane), options: laneOptions, key: .nowhereUploadLane))
+            serverRows.append(.selection(label: String(localized: "Download Lane"), value: nowhereLaneDisplayValue(nowhereDownloadLane), options: laneOptions, key: .nowhereDownloadLane))
+            serverRows.append(.toggle(label: String(localized: "Mux", comment: "Mux for Nowhere TLS/TCP carrier"), isOn: nowhereMuxEnabled, key: .nowhereMux))
         } else if isTrojan {
             serverRows.append(.text(label: String(localized: "Password"), value: trojanPassword, placeholder: String(localized: "Password"), key: .trojanPassword, secure: true))
         } else if isAnyTLS {
@@ -497,6 +505,13 @@ class TVProxyEditorViewController: UITableViewController {
         }
     }
 
+    private func nowhereLaneDisplayValue(_ lane: NowhereProtocol.LaneKind) -> String {
+        switch lane {
+        case .tcp: "TLS"
+        case .quic: "QUIC"
+        }
+    }
+
     private var isValid: Bool {
         guard !name.isEmpty, !serverAddress.isEmpty, UInt16(serverPort) != nil else { return false }
         if isVLESS {
@@ -739,6 +754,11 @@ class TVProxyEditorViewController: UITableViewController {
         case .nowhereSpec: nowhereSpec = value
         case .nowhereSNI: nowhereSNI = value
         case .nowhereALPN: nowhereALPN = value
+        case .nowhereUploadLane:
+            if let lane = NowhereRoutePolicy.lane(from: value) { nowhereUploadLane = lane }
+        case .nowhereDownloadLane:
+            if let lane = NowhereRoutePolicy.lane(from: value) { nowhereDownloadLane = lane }
+        case .nowhereMux: nowhereMuxEnabled = value == "true"
         case .trojanPassword: trojanPassword = value
         case .trojanSNI: trojanSNI = value
         case .trojanALPN: trojanALPN = value
@@ -866,11 +886,14 @@ class TVProxyEditorViewController: UITableViewController {
             hysteriaPortsSpec = portHopping?.portsSpec ?? ""
             hysteriaHopIntervalText = String(portHopping?.intervalSeconds ?? HysteriaPortHopping.defaultIntervalSeconds)
             hysteriaSNI = sni
-        case .nowhere(let key, let spec, let tls):
+        case .nowhere(let key, let spec, let tls, let route):
             nowhereKey = key
             nowhereSpec = spec ?? ""
             nowhereSNI = tls.serverName
             nowhereALPN = tls.alpn?.first ?? ""
+            nowhereUploadLane = route.tcpUpload
+            nowhereDownloadLane = route.tcpDownload
+            nowhereMuxEnabled = route.muxEnabled
         case .trojan(let password, let tls):
             trojanPassword = password
             trojanSNI = tls.serverName
@@ -1079,10 +1102,16 @@ class TVProxyEditorViewController: UITableViewController {
             let sni = nowhereSNI.isEmpty ? bareAddress : nowhereSNI
             let spec = nowhereSpec.isEmpty ? nil : nowhereSpec
             let alpn: [String]? = nowhereALPN.isEmpty ? nil : [nowhereALPN]
+            let route = NowhereRoutePolicy(
+                tcpUpload: nowhereUploadLane,
+                tcpDownload: nowhereDownloadLane,
+                muxEnabled: nowhereMuxEnabled
+            )
             outbound = .nowhere(
                 key: nowhereKey,
                 spec: spec,
-                tls: TLSConfiguration(serverName: sni, alpn: alpn)
+                tls: TLSConfiguration(serverName: sni, alpn: alpn),
+                route: route
             )
         case .trojan:
             let sni = trojanSNI.isEmpty ? bareAddress : trojanSNI
