@@ -14,21 +14,38 @@ enum NowhereProtocol {
     static let maxTargetLength = 512
     
     static let closeErrCodeOK: UInt64 = 0x100
+    static let defaultSpec = "auto"
 
+    private static let proxyFrameVersion: UInt8 = 1
+    private static let defaultALPN = "now/1"
     private static let maxInputLength = 255
-    private static let derivedALPNLength = 12
     private static let specIDLength = 8
     private static let authMagicLength = 8
     private static let authInfoLength = 32
-    private static let specCommitmentLength = 32
+    private static let authContextLength = 32
+
+    private static let specIDLabel = Data("spec id".utf8)
+    private static let authMagicLabel = Data("auth magic".utf8)
+    private static let authInfoLabel = Data("auth hmac info".utf8)
+    private static let authContextLabel = Data("auth context".utf8)
+    private static let frameLayoutLabel = Data("proxy frame layout".utf8)
+
+    enum FrameElement: UInt8, Hashable {
+        case version
+        case type
+        case flowID
+        case target
+    }
 
     struct EffectiveSpec: Hashable {
         let effectiveALPN: String
-        let derivedALPN: String
+        let defaultALPN: String
         let effectiveSpecID: String
         let authMagic: Data
         let authInfo: Data
-        let specCommitment: Data
+        let authContext: Data
+        let tcpFrameOrder: [FrameElement]
+        let udpFrameOrder: [FrameElement]
     }
 
     enum UDPType: UInt8 {
@@ -51,28 +68,30 @@ enum NowhereProtocol {
         let effectiveSpec = if let spec, !spec.isEmpty {
             try validateOptional(Data(spec.utf8), name: "spec")
         } else {
-            keyBytes
+            Data(defaultSpec.utf8)
         }
 
         let specSalt = Data(SHA256.hash(data: effectiveSpec))
-        let prk = hkdfExtract(salt: specSalt, input: effectiveSpec)
-        let derivedALPN = base64URLNoPadding(hkdfExpand(prk: prk, info: Data("alpn".utf8), count: derivedALPNLength))
+        let specPRK = hkdfExtract(salt: specSalt, input: effectiveSpec)
+        let frameOrder = buildFrameOrder(seed: hkdfExpand(prk: specPRK, info: frameLayoutLabel, count: 8))
 
         let effectiveALPN: String
         if let alpn, !alpn.isEmpty {
             try validateOptional(Data(alpn.utf8), name: "alpn")
             effectiveALPN = alpn
         } else {
-            effectiveALPN = derivedALPN
+            effectiveALPN = defaultALPN
         }
 
         return EffectiveSpec(
             effectiveALPN: effectiveALPN,
-            derivedALPN: derivedALPN,
-            effectiveSpecID: base64URLNoPadding(hkdfExpand(prk: prk, info: Data("spec id".utf8), count: specIDLength)),
-            authMagic: hkdfExpand(prk: prk, info: Data("auth magic".utf8), count: authMagicLength),
-            authInfo: hkdfExpand(prk: prk, info: Data("auth hmac info".utf8), count: authInfoLength),
-            specCommitment: hkdfExpand(prk: prk, info: Data("spec commitment".utf8), count: specCommitmentLength)
+            defaultALPN: defaultALPN,
+            effectiveSpecID: base64URLNoPadding(hkdfExpand(prk: specPRK, info: specIDLabel, count: specIDLength)),
+            authMagic: hkdfExpand(prk: specPRK, info: authMagicLabel, count: authMagicLength),
+            authInfo: hkdfExpand(prk: specPRK, info: authInfoLabel, count: authInfoLength),
+            authContext: hkdfExpand(prk: specPRK, info: authContextLabel, count: authContextLength),
+            tcpFrameOrder: frameOrder.tcp,
+            udpFrameOrder: frameOrder.udp
         )
     }
 
@@ -88,13 +107,13 @@ enum NowhereProtocol {
 
         var message = Data()
         message.append(protocolSpec.authInfo)
-        message.append(protocolSpec.specCommitment)
+        message.append(protocolSpec.authContext)
         message.append(nonce)
 
-        let derived = Data(SHA256.hash(data: Data(key.utf8)))
+        let authKey = Data(SHA256.hash(data: Data(key.utf8)))
         let tag = HMAC<SHA256>.authenticationCode(
             for: message,
-            using: SymmetricKey(data: derived)
+            using: SymmetricKey(data: authKey)
         )
 
         var frame = Data(capacity: authFrameLength)
@@ -155,32 +174,99 @@ enum NowhereProtocol {
             .replacingOccurrences(of: "=", with: "")
     }
 
-    static func encodeTCPRequest(address: String) throws -> Data {
-        try encodeTarget(address)
+    private static func buildFrameOrder(seed: Data) -> (tcp: [FrameElement], udp: [FrameElement]) {
+        var tcp: [FrameElement] = [.version, .target]
+        if (seed.first ?? 0) & 1 == 1 {
+            tcp.swapAt(0, 1)
+        }
+
+        var udp: [FrameElement] = [.version, .type, .flowID, .target]
+        guard !seed.isEmpty else { return (tcp, udp) }
+        for i in stride(from: udp.count - 1, through: 1, by: -1) {
+            let seedIndex = udp.count - i
+            let seedByte = seedIndex < seed.count ? byte(seed, at: seedIndex) : 0
+            udp.swapAt(i, Int(seedByte) % (i + 1))
+        }
+        return (tcp, udp)
     }
 
-    static func encodeUDPDatagram(type: UDPType, flowID: UInt64, target: String, payload: Data) throws -> Data {
-        let targetBytes = try encodeTarget(target)
-        var out = Data(capacity: 1 + 8 + targetBytes.count + payload.count)
-        out.append(type.rawValue)
-        out.append(uint64Bytes(flowID))
-        out.append(targetBytes)
+    static func encodeTCPRequest(address: String, protocolSpec: EffectiveSpec) throws -> Data {
+        let targetBytes = try encodeTarget(address)
+        var out = Data(capacity: 1 + targetBytes.count)
+        for element in protocolSpec.tcpFrameOrder {
+            switch element {
+            case .version:
+                out.append(proxyFrameVersion)
+            case .target:
+                out.append(targetBytes)
+            case .type, .flowID:
+                break
+            }
+        }
+        return out
+    }
+
+    static func encodeUDPDatagram(type: UDPType, flowID: UInt64, target: String, payload: Data, protocolSpec: EffectiveSpec) throws -> Data {
+        let header = try encodeUDPHeader(type: type, flowID: flowID, target: target, protocolSpec: protocolSpec)
+        var out = Data(capacity: header.count + payload.count)
+        out.append(header)
         out.append(payload)
         return out
     }
 
-    static func decodeUDPDatagram(_ data: Data) -> UDPMessage? {
-        guard data.count >= 11 else { return nil }
-        let type = byte(data, at: 0)
-        guard type == UDPType.response.rawValue || type == UDPType.close.rawValue else { return nil }
-        let flowID = readUInt64(data, at: 1)
-        guard let parsed = decodeTarget(data, offset: 9) else { return nil }
-        let payload = data.subdata(in: parsed.nextOffset..<data.endIndex)
-        return UDPMessage(type: type, flowID: flowID, target: parsed.target, payload: payload)
+    private static func encodeUDPHeader(type: UDPType, flowID: UInt64, target: String, protocolSpec: EffectiveSpec) throws -> Data {
+        let targetBytes = try encodeTarget(target)
+        var out = Data(capacity: udpHeaderSize(target: target, protocolSpec: protocolSpec))
+        for element in protocolSpec.udpFrameOrder {
+            switch element {
+            case .version:
+                out.append(proxyFrameVersion)
+            case .type:
+                out.append(type.rawValue)
+            case .flowID:
+                out.append(uint64Bytes(flowID))
+            case .target:
+                out.append(targetBytes)
+            }
+        }
+        return out
     }
 
-    static func udpHeaderSize(target: String) -> Int {
-        1 + 8 + 2 + target.utf8.count
+    static func decodeUDPDatagram(_ data: Data, protocolSpec: EffectiveSpec) -> UDPMessage? {
+        guard data.count >= 12 else { return nil }
+        var offset = 0
+        var frameType: UInt8?
+        var flowID: UInt64?
+        var target: String?
+        for element in protocolSpec.udpFrameOrder {
+            switch element {
+            case .version:
+                guard offset < data.count, byte(data, at: offset) == proxyFrameVersion else { return nil }
+                offset += 1
+            case .type:
+                guard offset < data.count else { return nil }
+                frameType = byte(data, at: offset)
+                offset += 1
+            case .flowID:
+                guard offset + 8 <= data.count else { return nil }
+                flowID = readUInt64(data, at: offset)
+                offset += 8
+            case .target:
+                guard let parsed = decodeTarget(data, offset: offset) else { return nil }
+                target = parsed.target
+                offset = data.distance(from: data.startIndex, to: parsed.nextOffset)
+            }
+        }
+        guard let type = frameType,
+              type == UDPType.response.rawValue || type == UDPType.close.rawValue,
+              let flowID,
+              let target else { return nil }
+        let payload = data.subdata(in: data.index(data.startIndex, offsetBy: offset)..<data.endIndex)
+        return UDPMessage(type: type, flowID: flowID, target: target, payload: payload)
+    }
+
+    static func udpHeaderSize(target: String, protocolSpec _: EffectiveSpec) -> Int {
+        1 + 1 + 8 + 2 + target.utf8.count
     }
 
     private static func encodeTarget(_ target: String) throws -> Data {

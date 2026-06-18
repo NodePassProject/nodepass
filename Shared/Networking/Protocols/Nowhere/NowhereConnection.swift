@@ -73,7 +73,10 @@ nonisolated final class NowhereConnection: ProxyConnection {
         state = .handshaking
         let frame: Data
         do {
-            frame = try NowhereProtocol.encodeTCPRequest(address: destination)
+            frame = try NowhereProtocol.encodeTCPRequest(
+                address: destination,
+                protocolSpec: session.protocolSpec
+            )
         } catch {
             fail(error)
             return

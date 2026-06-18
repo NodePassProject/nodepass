@@ -58,6 +58,8 @@ nonisolated final class NowhereSession {
     private var _poolTCPCount = 0
     private var _poolUDPCount = 0
 
+    var protocolSpec: NowhereProtocol.EffectiveSpec { configuration.protocolSpec }
+
     var isClosed: Bool {
         _poolLock.lock()
         defer { _poolLock.unlock() }
@@ -202,7 +204,7 @@ nonisolated final class NowhereSession {
     }
 
     private func handleDatagram(_ data: Data) {
-        guard let msg = NowhereProtocol.decodeUDPDatagram(data),
+        guard let msg = NowhereProtocol.decodeUDPDatagram(data, protocolSpec: configuration.protocolSpec),
               msg.type == NowhereProtocol.UDPType.response.rawValue else { return }
         udpSessions[msg.flowID]?.handleIncomingDatagram(msg.payload)
     }
