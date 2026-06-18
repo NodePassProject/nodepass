@@ -78,11 +78,11 @@ struct ProxyEditorView: View {
     // Nowhere fields
     @State private var nowhereKey = ""
     @State private var nowhereSpec = ""
-    @State private var nowhereSNI = ""
-    @State private var nowhereALPN = ""
     @State private var nowhereUploadLane: NowhereProtocol.LaneKind = .quic
     @State private var nowhereDownloadLane: NowhereProtocol.LaneKind = .quic
     @State private var nowhereMuxEnabled = true
+    @State private var nowhereSNI = ""
+    @State private var nowhereALPN = ""
 
     // Trojan fields
     @State private var trojanPassword = ""
@@ -372,19 +372,19 @@ struct ProxyEditorView: View {
                     TextWithColorfulIcon(title: "Spec", comment: nil, systemName: "slider.horizontal.3", foregroundColor: .white, backgroundColor: .teal)
                 }
                 Picker(selection: $nowhereUploadLane) {
-                    Text(verbatim: "TCP").tag(NowhereProtocol.LaneKind.tcp)
                     Text(verbatim: "UDP").tag(NowhereProtocol.LaneKind.quic)
+                    Text(verbatim: "TCP").tag(NowhereProtocol.LaneKind.tcp)
                 } label: {
                     TextWithColorfulIcon(title: "Upload", comment: nil, systemName: "arrow.up.circle.fill", foregroundColor: .white, backgroundColor: .blue)
                 }
                 Picker(selection: $nowhereDownloadLane) {
-                    Text(verbatim: "TCP").tag(NowhereProtocol.LaneKind.tcp)
                     Text(verbatim: "UDP").tag(NowhereProtocol.LaneKind.quic)
+                    Text(verbatim: "TCP").tag(NowhereProtocol.LaneKind.tcp)
                 } label: {
                     TextWithColorfulIcon(title: "Download", comment: nil, systemName: "arrow.down.circle.fill", foregroundColor: .white, backgroundColor: .blue)
                 }
                 Toggle(isOn: $nowhereMuxEnabled) {
-                    TextWithColorfulIcon(title: "Mux", comment: "Mux for Nowhere TLS/TCP carrier", systemName: "rectangle.split.3x1.fill", foregroundColor: .white, backgroundColor: .teal)
+                    TextWithColorfulIcon(title: "Mux", comment: "Mux for Nowhere protocol", systemName: "rectangle.split.3x1.fill", foregroundColor: .white, backgroundColor: .teal)
                 }
             } else if isTrojan {
                 LabeledContent {
@@ -1103,11 +1103,11 @@ struct ProxyEditorView: View {
         case .nowhere(let key, let spec, let tls, let route):
             nowhereKey = key
             nowhereSpec = spec ?? ""
-            nowhereSNI = tls.serverName
-            nowhereALPN = tls.alpn?.first ?? ""
             nowhereUploadLane = route.tcpUpload
             nowhereDownloadLane = route.tcpDownload
             nowhereMuxEnabled = route.muxEnabled
+            nowhereSNI = tls.serverName
+            nowhereALPN = tls.alpn?.first ?? ""
         case .trojan(let password, let tls):
             trojanPassword = password
             trojanSNI = tls.serverName
@@ -1319,14 +1319,14 @@ struct ProxyEditorView: View {
                 sni: sni
             )
         case .nowhere:
-            let sni = nowhereSNI.isEmpty ? bareAddress : nowhereSNI
             let spec = nowhereSpec.isEmpty ? nil : nowhereSpec
-            let alpn: [String]? = nowhereALPN.isEmpty ? nil : [nowhereALPN]
             let route = NowhereRoutePolicy(
                 tcpUpload: nowhereUploadLane,
                 tcpDownload: nowhereDownloadLane,
                 muxEnabled: nowhereMuxEnabled
             )
+            let sni = nowhereSNI.isEmpty ? bareAddress : nowhereSNI
+            let alpn: [String]? = nowhereALPN.isEmpty ? nil : [nowhereALPN]
             outbound = .nowhere(
                 key: nowhereKey,
                 spec: spec,

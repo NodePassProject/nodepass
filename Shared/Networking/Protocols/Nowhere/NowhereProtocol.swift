@@ -14,7 +14,7 @@ enum NowhereProtocol {
     static let protocolVersion: UInt8 = 1
     static let frameHeaderLength = 15
     static let maxTargetLength = 512
-    static let defaultALPN = "npq1"
+    static let defaultALPN = "now/1"
     static let frameFlagUpload: UInt8 = 1
     static let frameFlagDownload: UInt8 = 2
     
@@ -74,6 +74,13 @@ enum NowhereProtocol {
     enum LaneKind: UInt8, Hashable {
         case quic = 1
         case tcp = 2
+
+        var displayName: String {
+            switch self {
+            case .quic: "UDP"
+            case .tcp: "TCP"
+            }
+        }
     }
 
     struct Frame {

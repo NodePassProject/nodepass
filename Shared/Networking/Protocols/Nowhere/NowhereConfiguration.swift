@@ -25,8 +25,8 @@ struct NowhereRoutePolicy: Hashable {
 
     static func lane(from value: String?) -> NowhereProtocol.LaneKind? {
         switch value?.lowercased() {
-        case "tcp": return .tcp
         case "quic", "udp": return .quic
+        case "tcp": return .tcp
         default: return nil
         }
     }
