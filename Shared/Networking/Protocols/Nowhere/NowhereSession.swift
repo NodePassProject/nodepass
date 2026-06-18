@@ -358,7 +358,6 @@ nonisolated final class NowhereTCPMuxConnection: ProxyConnection, NowhereTCPFlow
     private let retainedClient: NowhereTCPMuxClient?
     private weak var quicDownlinkSession: NowhereSession?
     private let flowID: UInt64
-    private let lock = UnfairLock()
     private var closed = false
     private var receiveBuffer = Data()
     private var pendingReceive: ((Data?, Error?) -> Void)?
@@ -522,7 +521,7 @@ nonisolated final class NowhereSession {
 
     var negotiatedSessionID: UInt64 {
         if isOnQueue { return sessionID }
-        queue.sync { sessionID }
+        return queue.sync { sessionID }
     }
 
     init(configuration: NowhereConfiguration, transport: QUICDatagramTransport? = nil) {

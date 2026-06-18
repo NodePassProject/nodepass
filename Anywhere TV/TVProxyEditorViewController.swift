@@ -236,9 +236,9 @@ class TVProxyEditorViewController: UITableViewController {
         } else if isNowhere {
             serverRows.append(.text(label: String(localized: "Key"), value: nowhereKey, placeholder: String(localized: "Key"), key: .nowhereKey, secure: true))
             serverRows.append(.text(label: String(localized: "Spec"), value: nowhereSpec, placeholder: String(localized: "Spec"), key: .nowhereSpec))
-            let laneOptions = [("TLS", "tcp"), ("QUIC", "quic")]
-            serverRows.append(.selection(label: String(localized: "Upload Lane"), value: nowhereLaneDisplayValue(nowhereUploadLane), options: laneOptions, key: .nowhereUploadLane))
-            serverRows.append(.selection(label: String(localized: "Download Lane"), value: nowhereLaneDisplayValue(nowhereDownloadLane), options: laneOptions, key: .nowhereDownloadLane))
+            let laneOptions = [("TCP", "tcp"), ("UDP", "quic")]
+            serverRows.append(.selection(label: String(localized: "Upload"), value: nowhereLaneDisplayValue(nowhereUploadLane), options: laneOptions, key: .nowhereUploadLane))
+            serverRows.append(.selection(label: String(localized: "Download"), value: nowhereLaneDisplayValue(nowhereDownloadLane), options: laneOptions, key: .nowhereDownloadLane))
             serverRows.append(.toggle(label: String(localized: "Mux", comment: "Mux for Nowhere TLS/TCP carrier"), isOn: nowhereMuxEnabled, key: .nowhereMux))
         } else if isTrojan {
             serverRows.append(.text(label: String(localized: "Password"), value: trojanPassword, placeholder: String(localized: "Password"), key: .trojanPassword, secure: true))
@@ -507,8 +507,8 @@ class TVProxyEditorViewController: UITableViewController {
 
     private func nowhereLaneDisplayValue(_ lane: NowhereProtocol.LaneKind) -> String {
         switch lane {
-        case .tcp: "TLS"
-        case .quic: "QUIC"
+        case .tcp: "TCP"
+        case .quic: "UDP"
         }
     }
 

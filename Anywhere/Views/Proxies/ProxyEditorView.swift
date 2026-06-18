@@ -372,19 +372,17 @@ struct ProxyEditorView: View {
                     TextWithColorfulIcon(title: "Spec", comment: nil, systemName: "slider.horizontal.3", foregroundColor: .white, backgroundColor: .teal)
                 }
                 Picker(selection: $nowhereUploadLane) {
-                    Text("TLS").tag(NowhereProtocol.LaneKind.tcp)
-                    Text("QUIC").tag(NowhereProtocol.LaneKind.quic)
+                    Text(verbatim: "TCP").tag(NowhereProtocol.LaneKind.tcp)
+                    Text(verbatim: "UDP").tag(NowhereProtocol.LaneKind.quic)
                 } label: {
-                    TextWithColorfulIcon(title: "Upload Lane", comment: nil, systemName: "arrow.up.circle.fill", foregroundColor: .white, backgroundColor: .blue)
+                    TextWithColorfulIcon(title: "Upload", comment: nil, systemName: "arrow.up.circle.fill", foregroundColor: .white, backgroundColor: .blue)
                 }
-                .pickerStyle(.segmented)
                 Picker(selection: $nowhereDownloadLane) {
-                    Text("TLS").tag(NowhereProtocol.LaneKind.tcp)
-                    Text("QUIC").tag(NowhereProtocol.LaneKind.quic)
+                    Text(verbatim: "TCP").tag(NowhereProtocol.LaneKind.tcp)
+                    Text(verbatim: "UDP").tag(NowhereProtocol.LaneKind.quic)
                 } label: {
-                    TextWithColorfulIcon(title: "Download Lane", comment: nil, systemName: "arrow.down.circle.fill", foregroundColor: .white, backgroundColor: .blue)
+                    TextWithColorfulIcon(title: "Download", comment: nil, systemName: "arrow.down.circle.fill", foregroundColor: .white, backgroundColor: .blue)
                 }
-                .pickerStyle(.segmented)
                 Toggle(isOn: $nowhereMuxEnabled) {
                     TextWithColorfulIcon(title: "Mux", comment: "Mux for Nowhere TLS/TCP carrier", systemName: "rectangle.split.3x1.fill", foregroundColor: .white, backgroundColor: .teal)
                 }
