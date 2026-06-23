@@ -80,8 +80,8 @@ class TVProxyEditorViewController: UITableViewController {
     private var nowhereKey = ""
     private var nowhereSpec = ""
     private var nowhereNetwork: NowhereNetwork = .udp
-    private var nowherePool = 0
-    private var nowhereLastPool = NowherePool.enabledDefault
+    private var nowherePoolEnabled = false
+    private var nowherePoolValue = NowherePool.enabledDefault
     private var nowhereSNI = ""
     private var nowhereALPN = ""
 
@@ -133,6 +133,14 @@ class TVProxyEditorViewController: UITableViewController {
     private var isSOCKS5: Bool { selectedProtocol == .socks5 }
     private var isSudoku: Bool { selectedProtocol == .sudoku }
     private var isNaive: Bool { selectedProtocol.isNaive }
+
+    private var resolvedNowherePool: Int {
+        guard nowherePoolEnabled else { return 0 }
+        return min(
+            NowherePool.sliderRange.upperBound,
+            max(NowherePool.sliderRange.lowerBound, nowherePoolValue)
+        )
+    }
 
     // MARK: - Form Structure
 
@@ -309,11 +317,11 @@ class TVProxyEditorViewController: UITableViewController {
                 ),
             ]
             if nowhereNetwork == .tcp {
-                transportRows.append(.toggle(label: String(localized: "Boost"), isOn: nowherePool > 0, key: .nowherePoolEnabled, systemImage: "speedometer"))
-                if nowherePool > 0 {
+                transportRows.append(.toggle(label: String(localized: "Boost"), isOn: nowherePoolEnabled, key: .nowherePoolEnabled, systemImage: "speedometer"))
+                if nowherePoolEnabled {
                     transportRows.append(.selection(
                         label: String(localized: "Boost"),
-                        value: String(nowherePool),
+                        value: String(nowherePoolValue),
                         options: NowherePool.sliderRange.map { (String($0), String($0)) },
                         key: .nowherePool
                     ))
@@ -779,17 +787,10 @@ class TVProxyEditorViewController: UITableViewController {
         case .nowhereNetwork:
             if let network = NowhereNetwork(rawValue: value) { nowhereNetwork = network }
         case .nowherePoolEnabled:
-            if value == "true" {
-                nowherePool = NowherePool.sliderRange.contains(nowhereLastPool)
-                    ? nowhereLastPool : NowherePool.enabledDefault
-            } else {
-                if nowherePool > 0 { nowhereLastPool = nowherePool }
-                nowherePool = 0
-            }
+            nowherePoolEnabled = value == "true"
         case .nowherePool:
             if let count = Int(value), NowherePool.sliderRange.contains(count) {
-                nowherePool = count
-                nowhereLastPool = count
+                nowherePoolValue = count
             }
         case .nowhereSNI: nowhereSNI = value
         case .nowhereALPN: nowhereALPN = value
@@ -931,8 +932,8 @@ class TVProxyEditorViewController: UITableViewController {
             nowhereKey = key
             nowhereSpec = spec ?? ""
             nowhereNetwork = net
-            nowherePool = pool
-            if pool > 0 { nowhereLastPool = pool }
+            nowherePoolEnabled = pool > 0
+            nowherePoolValue = pool > 0 ? pool : NowherePool.enabledDefault
             nowhereSNI = tls.serverName
             nowhereALPN = tls.alpn?.first ?? ""
         case .trojan(let password, let securityLayer):
@@ -1145,7 +1146,7 @@ class TVProxyEditorViewController: UITableViewController {
                 key: nowhereKey,
                 spec: spec,
                 net: nowhereNetwork,
-                pool: nowherePool,
+                pool: resolvedNowherePool,
                 securityLayer: .tls(TLSConfiguration(serverName: sni, alpn: alpn))
             )
         case .trojan:

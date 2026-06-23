@@ -78,8 +78,8 @@ struct ProxyEditorView: View {
     @State private var nowhereKey = ""
     @State private var nowhereSpec = ""
     @State private var nowhereNetwork: NowhereNetwork = .udp
-    @State private var nowherePool = 0
-    @State private var nowhereLastPool = NowherePool.enabledDefault
+    @State private var nowherePoolEnabled = false
+    @State private var nowherePoolSliderValue = Double(NowherePool.enabledDefault)
     @State private var nowhereSNI = ""
     @State private var nowhereALPN = ""
     
@@ -134,35 +134,28 @@ struct ProxyEditorView: View {
     
     private var nowherePoolEnabledBinding: Binding<Bool> {
         Binding(
-            get: { nowherePool > 0 },
-            set: { enabled in
-                if enabled {
-                    nowherePool = NowherePool.sliderRange.contains(nowhereLastPool)
-                    ? nowhereLastPool : NowherePool.enabledDefault
-                } else {
-                    if nowherePool > 0 { nowhereLastPool = nowherePool }
-                    nowherePool = 0
-                }
-            }
+            get: { nowherePoolEnabled },
+            set: { nowherePoolEnabled = $0 }
         )
     }
     
     private var nowherePoolSliderBinding: Binding<Double> {
         Binding(
-            get: { Double(max(NowherePool.sliderRange.lowerBound, nowherePool)) },
-            set: { value in
-                let count = min(
-                    NowherePool.sliderRange.upperBound,
-                    max(NowherePool.sliderRange.lowerBound, Int(value.rounded()))
-                )
-                nowherePool = count
-                nowhereLastPool = count
-            }
+            get: { nowherePoolSliderValue },
+            set: { nowherePoolSliderValue = $0 }
+        )
+    }
+
+    private var resolvedNowherePool: Int {
+        guard nowherePoolEnabled else { return 0 }
+        return min(
+            NowherePool.sliderRange.upperBound,
+            max(NowherePool.sliderRange.lowerBound, Int(nowherePoolSliderValue.rounded()))
         )
     }
     
     private var nowherePoolLevel: Int {
-        switch nowherePool {
+        switch nowherePoolSliderValue {
         case 1...3: 0
         case 4...6: 1
         default: 2
@@ -697,7 +690,7 @@ struct ProxyEditorView: View {
                     Toggle(isOn: nowherePoolEnabledBinding) {
                         TextWithColorfulIcon(title: "Boost", comment: nil, systemName: "speedometer", foregroundColor: .white, backgroundColor: .orange)
                     }
-                    if nowherePool > 0 {
+                    if nowherePoolEnabled {
                         VStack(spacing: 8) {
                             Slider(
                                 value: nowherePoolSliderBinding,
@@ -705,7 +698,7 @@ struct ProxyEditorView: View {
                                 step: 1
                             )
                             .accessibilityLabel(Text("Boost"))
-                            .accessibilityValue(Text(verbatim: "\(nowherePool)"))
+                            .accessibilityValue(Text(verbatim: "\(Int(nowherePoolSliderValue.rounded()))"))
                             HStack {
                                 ForEach(Array(["gauge.with.dots.needle.0percent", "gauge.with.dots.needle.50percent", "gauge.with.dots.needle.100percent"].enumerated()), id: \.offset) { index, symbol in
                                     Image(systemName: symbol)
@@ -1187,8 +1180,8 @@ struct ProxyEditorView: View {
             nowhereKey = key
             nowhereSpec = spec ?? ""
             nowhereNetwork = net
-            nowherePool = pool
-            if pool > 0 { nowhereLastPool = pool }
+            nowherePoolEnabled = pool > 0
+            nowherePoolSliderValue = Double(pool > 0 ? pool : NowherePool.enabledDefault)
             nowhereSNI = tls.serverName
             nowhereALPN = tls.alpn?.first ?? ""
         case .trojan(let password, let securityLayer):
@@ -1417,7 +1410,7 @@ struct ProxyEditorView: View {
                 key: nowhereKey,
                 spec: spec,
                 net: nowhereNetwork,
-                pool: nowherePool,
+                pool: resolvedNowherePool,
                 securityLayer: .tls(TLSConfiguration(serverName: sni, alpn: alpn))
             )
         case .trojan:
