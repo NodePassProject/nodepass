@@ -134,14 +134,6 @@ class TVProxyEditorViewController: UITableViewController {
     private var isSudoku: Bool { selectedProtocol == .sudoku }
     private var isNaive: Bool { selectedProtocol.isNaive }
 
-    private var resolvedNowherePool: Int {
-        guard nowherePoolEnabled else { return 0 }
-        return min(
-            NowherePool.sliderRange.upperBound,
-            max(NowherePool.sliderRange.lowerBound, nowherePoolValue)
-        )
-    }
-
     // MARK: - Form Structure
 
     private enum RowType {
@@ -1139,14 +1131,20 @@ class TVProxyEditorViewController: UITableViewController {
                 sni: sni
             )
         case .nowhere:
-            let sni = nowhereSNI.isEmpty ? bareAddress : nowhereSNI
             let spec = nowhereSpec.isEmpty ? nil : nowhereSpec
+            let pool = nowherePoolEnabled
+                ? min(
+                    NowherePool.sliderRange.upperBound,
+                    max(NowherePool.sliderRange.lowerBound, nowherePoolValue)
+                )
+                : 0
+            let sni = nowhereSNI.isEmpty ? bareAddress : nowhereSNI
             let alpn: [String]? = nowhereALPN.isEmpty ? nil : [nowhereALPN]
             outbound = .nowhere(
                 key: nowhereKey,
                 spec: spec,
                 net: nowhereNetwork,
-                pool: resolvedNowherePool,
+                pool: pool,
                 securityLayer: .tls(TLSConfiguration(serverName: sni, alpn: alpn))
             )
         case .trojan:

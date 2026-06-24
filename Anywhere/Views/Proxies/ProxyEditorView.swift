@@ -132,28 +132,6 @@ struct ProxyEditorView: View {
     private var isSudoku: Bool { selectedProtocol == .sudoku }
     private var isNaive: Bool { selectedProtocol.isNaive }
     
-    private var nowherePoolEnabledBinding: Binding<Bool> {
-        Binding(
-            get: { nowherePoolEnabled },
-            set: { nowherePoolEnabled = $0 }
-        )
-    }
-    
-    private var nowherePoolSliderBinding: Binding<Double> {
-        Binding(
-            get: { nowherePoolSliderValue },
-            set: { nowherePoolSliderValue = $0 }
-        )
-    }
-
-    private var resolvedNowherePool: Int {
-        guard nowherePoolEnabled else { return 0 }
-        return min(
-            NowherePool.sliderRange.upperBound,
-            max(NowherePool.sliderRange.lowerBound, Int(nowherePoolSliderValue.rounded()))
-        )
-    }
-    
     private var nowherePoolLevel: Int {
         switch nowherePoolSliderValue {
         case 1...3: 0
@@ -687,13 +665,13 @@ struct ProxyEditorView: View {
                     TextWithColorfulIcon(title: "Network", comment: nil, systemName: "globe", foregroundColor: .white, backgroundColor: .indigo)
                 }
                 if nowhereNetwork == .tcp {
-                    Toggle(isOn: nowherePoolEnabledBinding) {
+                    Toggle(isOn: $nowherePoolEnabled) {
                         TextWithColorfulIcon(title: "Boost", comment: nil, systemName: "speedometer", foregroundColor: .white, backgroundColor: .orange)
                     }
                     if nowherePoolEnabled {
                         VStack(spacing: 8) {
                             Slider(
-                                value: nowherePoolSliderBinding,
+                                value: $nowherePoolSliderValue,
                                 in: Double(NowherePool.sliderRange.lowerBound)...Double(NowherePool.sliderRange.upperBound),
                                 step: 1
                             )
@@ -1403,14 +1381,20 @@ struct ProxyEditorView: View {
                 sni: sni
             )
         case .nowhere:
-            let sni = nowhereSNI.isEmpty ? bareAddress : nowhereSNI
             let spec = nowhereSpec.isEmpty ? nil : nowhereSpec
+            let pool = nowherePoolEnabled
+                ? min(
+                    NowherePool.sliderRange.upperBound,
+                    max(NowherePool.sliderRange.lowerBound, Int(nowherePoolSliderValue.rounded()))
+                )
+                : 0
+            let sni = nowhereSNI.isEmpty ? bareAddress : nowhereSNI
             let alpn: [String]? = nowhereALPN.isEmpty ? nil : [nowhereALPN]
             outbound = .nowhere(
                 key: nowhereKey,
                 spec: spec,
                 net: nowhereNetwork,
-                pool: resolvedNowherePool,
+                pool: pool,
                 securityLayer: .tls(TLSConfiguration(serverName: sni, alpn: alpn))
             )
         case .trojan:
